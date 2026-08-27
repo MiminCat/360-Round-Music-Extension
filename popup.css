@@ -1,0 +1,151 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 280px;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background: linear-gradient(160deg, #1b1f3b, #0f1224);
+  color: #f0f0f5;
+}
+
+.container {
+  padding: 16px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 2px 0;
+}
+
+.subtitle {
+  font-size: 11px;
+  color: #a0a3c4;
+  margin: 0 0 14px 0;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider-toggle {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #45486b;
+  transition: 0.2s;
+  border-radius: 20px;
+}
+
+.slider-toggle:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+}
+
+input:checked + .slider-toggle {
+  background-color: #6c7bff;
+}
+
+input:checked + .slider-toggle:before {
+  transform: translateX(18px);
+}
+
+.modes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 11px;
+  background: #262a4d;
+  border: 1px solid #3a3e66;
+  color: #f0f0f5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.mode-btn:hover {
+  background: #33376a;
+}
+
+.mode-btn.active {
+  background: #6c7bff;
+  border-color: #6c7bff;
+}
+
+.speed-row {
+  margin-bottom: 12px;
+}
+
+.field-row {
+  margin-bottom: 14px;
+}
+
+.field-row label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #c7c9e8;
+}
+
+.field-row select {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid #3a3e66;
+  border-radius: 6px;
+  background: #262a4d;
+  color: #f0f0f5;
+  font-size: 12px;
+}
+
+.speed-row label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #c7c9e8;
+}
+
+.speed-row input[type="range"] {
+  width: 100%;
+}
+
+#speedValue {
+  font-size: 11px;
+  color: #a0a3c4;
+}
+
+.hint {
+  font-size: 10px;
+  color: #767a9e;
+  margin-top: 10px;
+  line-height: 1.4;
+}

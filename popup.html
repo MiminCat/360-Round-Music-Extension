@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>16D Relax & Focus Audio</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>16D Relax &amp; Focus</h1>
+    <p class="subtitle">Audio spasial untuk musik dan film</p>
+
+    <div class="toggle-row">
+      <span>Aktifkan Efek</span>
+      <label class="switch">
+        <input type="checkbox" id="enabledToggle" checked />
+        <span class="slider-toggle"></span>
+      </label>
+    </div>
+
+    <div class="modes">
+      <button class="mode-btn" data-mode="sleep">🌙 Mode Tidur</button>
+      <button class="mode-btn" data-mode="focus">🎯 Mode Fokus</button>
+      <button class="mode-btn" data-mode="normal">⚡ Mode Normal</button>
+    </div>
+
+    <div class="field-row">
+      <label for="movementMode">Mode Gerakan</label>
+      <select id="movementMode">
+        <option value="sweep">Left-Right Sweep</option>
+        <option value="orbit">360° Circular Orbit</option>
+        <option value="cinema">Cinema Room</option>
+      </select>
+    </div>
+
+    <div class="speed-row">
+      <label for="speedSlider">Kecepatan Putaran</label>
+      <input type="range" id="speedSlider" min="0.001" max="0.03" step="0.001" value="0.008" />
+      <span id="speedValue">0.008</span>
+    </div>
+
+    <p class="hint">Tip: gunakan headphone agar efek spasial terasa maksimal.</p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
