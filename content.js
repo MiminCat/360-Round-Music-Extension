@@ -34,6 +34,8 @@
   let reverbGain = null;
   let cinemaReverb = null;
   let masterLimiter = null;
+  let customPanNode = null;
+  let connectedVideo = null;
   let animationFrameId = null;
   let movementTimer = null;
   let angle = 0;
@@ -43,6 +45,16 @@
   let spatialMaterial = false;
   let spectrumData = null;
   let leftData = null;
+
+  function isMediaPlaying() {
+    return !!(
+      connectedVideo &&
+      !connectedVideo.paused &&
+      !connectedVideo.ended &&
+      connectedVideo.currentTime > 0 &&
+      connectedVideo.readyState > 1
+    );
+  }
   let rightData = null;
   let bassProfile = 0;
   let vocalProfile = 0;
@@ -62,13 +74,18 @@
   let nextTargetTime = 0;
   let lastTargetIndex = -1;
 
+  let customPosition = { x: 0, y: 0.75 };
+
   function loadSettings(callback) {
-    chrome.storage.local.get(["speed", "enabled", "movementMode"], (data) => {
+    chrome.storage.local.get(["speed", "enabled", "movementMode", "customPos"], (data) => {
       if (typeof data.speed === "number") baseSpeed = data.speed;
       if (typeof data.enabled === "boolean") enabled = data.enabled;
-      movementMode = ["sweep", "orbit", "cinema"].includes(data.movementMode)
+      movementMode = ["sweep", "orbit", "cinema", "custom"].includes(data.movementMode)
         ? data.movementMode
         : "sweep";
+      if (data.customPos && typeof data.customPos.x === "number" && typeof data.customPos.y === "number") {
+        customPosition = data.customPos;
+      }
       callback();
     });
   }
@@ -197,6 +214,10 @@
     masterLimiter.attack.value = 0.003;
     masterLimiter.release.value = 0.12;
 
+    connectedVideo = videoElement;
+    customPanNode = audioCtx.createStereoPanner();
+    customPanNode.pan.value = 0;
+
     sourceNode.connect(analyserNode);
     sourceNode.connect(splitter);
     splitter.connect(leftAnalyser, 0);
@@ -214,7 +235,7 @@
     enhancementFilter.connect(cinemaEffectFilter).connect(movementToneFilter).connect(movementSparkleFilter).connect(movementPanner).connect(movementGain).connect(masterLimiter);
     movementPanner.connect(reverbSend);
     reverbSend.connect(reverbPreDelay).connect(reverbFilter).connect(cinemaReverb).connect(reverbGain).connect(masterLimiter);
-    masterLimiter.connect(audioCtx.destination);
+    masterLimiter.connect(customPanNode).connect(audioCtx.destination);
 
     startAdaptiveProcessing();
     startMovementTimer();
@@ -269,21 +290,39 @@
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     function process() {
       if (!audioCtx) return;
+      const playing = isMediaPlaying();
+      if (!playing) {
+        bassProfile *= 0.8;
+        vocalProfile *= 0.8;
+        trebleProfile *= 0.8;
+        lastEnergy *= 0.8;
+        animationFrameId = requestAnimationFrame(process);
+        return;
+      }
+
       analyserNode.getByteFrequencyData(spectrumData);
-      let bassEnergy = 0;
-      let vocalEnergy = 0;
-      let trebleEnergy = 0;
-      const bassLimit = Math.max(1, Math.floor(spectrumData.length * 0.08));
-      const vocalLimit = Math.floor(spectrumData.length * 0.42);
+      let bSum = 0, bCount = 0;
+      let vSum = 0, vCount = 0;
+      let tSum = 0, tCount = 0;
+
       for (let index = 0; index < spectrumData.length; index += 1) {
         const energy = spectrumData[index] / 255;
-        if (index < bassLimit) bassEnergy += energy;
-        else if (index < vocalLimit) vocalEnergy += energy;
-        else trebleEnergy += energy;
+        if (index <= 1) {
+          bSum += energy;
+          bCount += 1;
+        } else if (index <= 20) {
+          vSum += energy;
+          vCount += 1;
+        } else if (index <= 85) {
+          tSum += energy;
+          tCount += 1;
+        }
       }
-      bassEnergy /= bassLimit;
-      vocalEnergy /= Math.max(1, vocalLimit - bassLimit);
-      trebleEnergy /= Math.max(1, spectrumData.length - vocalLimit);
+
+      const bassEnergy = bCount > 0 ? bSum / bCount : 0;
+      const vocalEnergy = vCount > 0 ? vSum / vCount : 0;
+      const trebleEnergy = tCount > 0 ? tSum / tCount : 0;
+
       const energyChange = Math.abs((bassEnergy + trebleEnergy) - lastEnergy);
       if (energyChange > 0.12) {
         targetMotionPhase += (trebleEnergy - bassEnergy) * 0.5;
@@ -291,9 +330,9 @@
         if (movementMode === "orbit" && performance.now() >= nextTargetTime) chooseSpatialTarget();
       }
       lastEnergy = bassEnergy + trebleEnergy;
-      bassProfile += (bassEnergy - bassProfile) * 0.12;
-      vocalProfile += (vocalEnergy - vocalProfile) * 0.1;
-      trebleProfile += (trebleEnergy - trebleProfile) * 0.1;
+      bassProfile += (bassEnergy - bassProfile) * 0.15;
+      vocalProfile += (vocalEnergy - vocalProfile) * 0.15;
+      trebleProfile += (trebleEnergy - trebleProfile) * 0.15;
       spatialMaterial = detectSpatialMaterial();
       const now = audioCtx.currentTime;
       if (enabled) {
@@ -316,17 +355,53 @@
     if (movementTimer) clearInterval(movementTimer);
     movementTimer = setInterval(() => {
       if (!audioCtx || !enabled) return;
+      const playing = isMediaPlaying();
+      if (!playing && movementMode !== "custom") return;
       const now = audioCtx.currentTime;
       if (movementMode === "cinema") {
+        if (customPanNode) customPanNode.pan.setTargetAtTime(0, now, 0.05);
         movementPanner.positionX.setTargetAtTime(0, now, 0.2);
         movementPanner.positionY.setTargetAtTime(0, now, 0.2);
         movementPanner.positionZ.setTargetAtTime(-1, now, 0.2);
+        currentX = 0;
+        currentY = 0;
+        currentZ = -1;
         movementGain.gain.setTargetAtTime(0.22, now, 0.2);
         movementToneFilter.frequency.setTargetAtTime(20000, now, 0.2);
         movementSparkleFilter.gain.setTargetAtTime(1.6, now, 0.2);
         reverbGain.gain.setTargetAtTime(0.34, now, 0.25);
         return;
       }
+      if (movementMode === "custom") {
+        const panVal = Math.max(-1, Math.min(1, customPosition.x || 0));
+        if (customPanNode) customPanNode.pan.setTargetAtTime(panVal, now, 0.03);
+
+        const x = panVal * 2.2;
+        const z = -((customPosition.y !== undefined ? customPosition.y : 0.75)) * 2.2;
+        currentX = x;
+        currentY = 0;
+        currentZ = z;
+
+        movementPanner.positionX.setTargetAtTime(x, now, 0.04);
+        movementPanner.positionY.setTargetAtTime(0, now, 0.04);
+        movementPanner.positionZ.setTargetAtTime(z, now, 0.04);
+
+        const frontIntensity = Math.min(1, Math.max(0, -z) / 2.4);
+        const backIntensity = Math.min(1, Math.max(0, z) / 2.4);
+        const distance = Math.sqrt(x * x + z * z);
+        const distanceFactor = Math.min(1, Math.max(0, (distance - 0.8) / 3.4));
+        const targetGain = 0.92 - distanceFactor * 0.3 + frontIntensity * 0.08;
+        const targetTone = 20000 - backIntensity * 7000;
+        const targetRoom = 0.3 + distanceFactor * 0.2 - frontIntensity * 0.06;
+
+        movementGain.gain.setTargetAtTime(targetGain, now, 0.06);
+        movementToneFilter.frequency.setTargetAtTime(Math.max(11800, targetTone), now, 0.06);
+        movementSparkleFilter.gain.setTargetAtTime(1.4, now, 0.06);
+        reverbGain.gain.setTargetAtTime(Math.max(0.2, targetRoom), now, 0.06);
+        widthDelay.delayTime.setTargetAtTime(0.0012 + Math.abs(z) * 0.001, now, 0.06);
+        return;
+      }
+      if (customPanNode) customPanNode.pan.setTargetAtTime(0, now, 0.05);
       if (movementMode === "orbit" && performance.now() >= nextTargetTime) chooseSpatialTarget();
       if (movementMode === "cinema" && performance.now() >= nextTargetTime) {
         nextTargetTime = performance.now() + 5000 + Math.random() * 3000;
@@ -399,6 +474,7 @@
   function stopProcessing() {
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
+    if (customPanNode) customPanNode.pan.setTargetAtTime(0, now, 0.04);
     nativeGain.gain.setTargetAtTime(1, now, 0.08);
     movementGain.gain.setTargetAtTime(0, now, 0.08);
     reverbGain.gain.setTargetAtTime(0, now, 0.08);
@@ -419,8 +495,26 @@
 
   function applySettings(settings) {
     if (typeof settings.speed === "number") baseSpeed = settings.speed;
-    if (["sweep", "orbit", "cinema"].includes(settings.movementMode)) movementMode = settings.movementMode;
+    if (["sweep", "orbit", "cinema", "custom"].includes(settings.movementMode)) movementMode = settings.movementMode;
     if (typeof settings.enabled === "boolean") enabled = settings.enabled;
+    if (settings.customPos && typeof settings.customPos.x === "number" && typeof settings.customPos.y === "number") {
+      customPosition = settings.customPos;
+      if (audioCtx && movementMode === "custom") {
+        const now = audioCtx.currentTime;
+        const panVal = Math.max(-1, Math.min(1, customPosition.x || 0));
+        if (customPanNode) customPanNode.pan.setTargetAtTime(panVal, now, 0.02);
+        const x = panVal * 2.2;
+        const z = -((customPosition.y !== undefined ? customPosition.y : 0.75)) * 2.2;
+        currentX = x;
+        currentY = 0;
+        currentZ = z;
+        if (movementPanner) {
+          movementPanner.positionX.setTargetAtTime(x, now, 0.02);
+          movementPanner.positionY.setTargetAtTime(0, now, 0.02);
+          movementPanner.positionZ.setTargetAtTime(z, now, 0.02);
+        }
+      }
+    }
     applyProfileLevels();
     if (enabled) resumeProcessing();
     else stopProcessing();
@@ -432,11 +526,34 @@
     if (changes.speed) settings.speed = changes.speed.newValue;
     if (changes.enabled) settings.enabled = changes.enabled.newValue;
     if (changes.movementMode) settings.movementMode = changes.movementMode.newValue;
+    if (changes.customPos) settings.customPos = changes.customPos.newValue;
     applySettings(settings);
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message && message.type === "UPDATE_SETTINGS") applySettings(message.settings || {});
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message && message.type === "UPDATE_SETTINGS") {
+      applySettings(message.settings || {});
+      if (sendResponse) sendResponse({ success: true });
+    } else if (message && message.type === "GET_AUDIO_STATUS") {
+      const playing = isMediaPlaying();
+      if (sendResponse) {
+        sendResponse({
+          connected: !!(audioCtx && connectedVideo),
+          isPlaying: playing,
+          enabled: enabled,
+          movementMode: movementMode,
+          currentX: currentX,
+          currentY: currentY,
+          currentZ: currentZ,
+          bass: playing ? bassProfile : 0,
+          vocal: playing ? vocalProfile : 0,
+          treble: playing ? trebleProfile : 0,
+          energy: playing ? lastEnergy : 0,
+          spatialMaterial: spatialMaterial
+        });
+      }
+    }
+    return true;
   });
 
   function injectAudio() {

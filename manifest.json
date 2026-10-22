@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Advanced 16D Relax & Focus Audio",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Mengubah audio YouTube menjadi 16D Spasial otomatis yang halus untuk fokus dan relaksasi, dengan filter anti-lelah telinga dan panel pengaturan kecepatan.",
   "permissions": ["activeTab", "scripting", "storage", "tabs"],
   "action": {

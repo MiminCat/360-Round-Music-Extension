@@ -1,46 +1,164 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>16D Relax & Focus Audio</title>
-  <link rel="stylesheet" href="popup.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>16D Spatial Audio</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="container">
-    <h1>16D Relax &amp; Focus</h1>
-    <p class="subtitle">Audio spasial untuk musik dan film</p>
-
-    <div class="toggle-row">
-      <span>Aktifkan Efek</span>
-      <label class="switch">
-        <input type="checkbox" id="enabledToggle" checked />
-        <span class="slider-toggle"></span>
-      </label>
+  <!-- Header -->
+  <div class="head">
+    <div class="brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 18 0M6 12a6 6 0 0 1 12 0M9 12a3 3 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <h1>16D Spatial Audio</h1>
+        <div class="sub">Best with headphones</div>
+      </div>
     </div>
-
-    <div class="modes">
-      <button class="mode-btn" data-mode="sleep">🌙 Mode Tidur</button>
-      <button class="mode-btn" data-mode="focus">🎯 Mode Fokus</button>
-      <button class="mode-btn" data-mode="normal">⚡ Mode Normal</button>
-    </div>
-
-    <div class="field-row">
-      <label for="movementMode">Mode Gerakan</label>
-      <select id="movementMode">
-        <option value="sweep">Left-Right Sweep</option>
-        <option value="orbit">360° Circular Orbit</option>
-        <option value="cinema">Cinema Room</option>
-      </select>
-    </div>
-
-    <div class="speed-row">
-      <label for="speedSlider">Kecepatan Putaran</label>
-      <input type="range" id="speedSlider" min="0.001" max="0.03" step="0.001" value="0.008" />
-      <span id="speedValue">0.008</span>
-    </div>
-
-    <p class="hint">Tip: gunakan headphone agar efek spasial terasa maksimal.</p>
+    <label class="switch" aria-label="Enable spatial audio effect">
+      <input type="checkbox" id="enabled" checked>
+      <span></span>
+    </label>
   </div>
+
+  <!-- Realtime Stage & Spatial Map -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="engine-tag">
+        <span class="pulse-dot" id="pulseDot"></span>
+        <span id="audioEngineStatus">16D Ready</span>
+      </div>
+      <div class="fidelity-tag">HRTF 360°</div>
+    </div>
+
+    <svg id="map" viewBox="-112 -112 224 224" role="application" aria-label="Real-time spatial sound radar map">
+      <defs>
+        <clipPath id="clip"><circle r="96"/></clipPath>
+        <radialGradient id="haloGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#8b93ff" stop-opacity="0.8"/>
+          <stop offset="60%" stop-color="#8b93ff" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#8b93ff" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <g id="grid" clip-path="url(#clip)"></g>
+      <circle class="ring" r="32"/>
+      <circle class="ring" r="64"/>
+      <circle class="rim" r="96"/>
+      <g id="ticks"></g>
+      <line class="axis" x1="-96" y1="0" x2="96" y2="0"/>
+      <line class="axis" x1="0" y1="-96" x2="0" y2="96"/>
+      <text class="map-label" x="0" y="-103">Front</text>
+      <text class="map-label" x="0" y="105">Back</text>
+      <text class="map-label" x="-104" y="0">L</text>
+      <text class="map-label" x="104" y="0">R</text>
+      <text class="scale-label" x="3" y="-34">0.33</text>
+      <text class="scale-label" x="3" y="-66">0.66</text>
+      <line class="bearing" id="bearing" x1="0" y1="0" x2="0" y2="-72"/>
+      <g id="trail"></g>
+      <circle class="halo" id="halo" r="13" cx="0" cy="-72"/>
+      <circle class="dot" id="dot" r="5.5" cx="0" cy="-72"/>
+      <circle class="listener" r="10"/>
+      <path class="nose" d="M-3.5 -9 L0 -15 L3.5 -9 Z"/>
+    </svg>
+
+    <!-- 3-Column Readout: Azimuth (left), Position (center), Coordinates (right) -->
+    <dl class="readout">
+      <div>
+        <dt>Azimuth</dt>
+        <dd id="rAz">0°</dd>
+      </div>
+      <div>
+        <dt>Position</dt>
+        <dd class="sm" id="rPos">Front</dd>
+      </div>
+      <div>
+        <dt>Coordinates</dt>
+        <dd class="xy">
+          <span><i>X</i><b id="rX">0.00</b></span>
+          <span><i>Y</i><b id="rY">+0.75</b></span>
+        </dd>
+      </div>
+    </dl>
+
+    <!-- Realtime Audio Analysis / Spectrum Energy -->
+    <div class="analysis-row" title="Real-time audio frequency analysis">
+      <div class="bar-col">
+        <div class="bar-head"><span>BASS</span><b id="valBass">0%</b></div>
+        <div class="meter"><div class="fill" id="meterBass"></div></div>
+      </div>
+      <div class="bar-col">
+        <div class="bar-head"><span>VOCAL</span><b id="valVocal">0%</b></div>
+        <div class="meter"><div class="fill" id="meterVocal"></div></div>
+      </div>
+      <div class="bar-col">
+        <div class="bar-head"><span>TREBLE</span><b id="valTreble">0%</b></div>
+        <div class="meter"><div class="fill" id="meterTreble"></div></div>
+      </div>
+    </div>
+
+    <!-- Custom Mode Action Bar -->
+    <div class="custom-bar">
+      <span>Drag map or use arrow keys to steer sound</span>
+      <button type="button" id="reset">Reset</button>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="group">
+      <div class="label">Sound Mode</div>
+      <div class="seg" role="radiogroup" aria-label="Sound Mode">
+        <label>
+          <input type="radio" name="mode" value="sleep">
+          <span class="opt">
+            <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>
+            Sleep
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="focus" checked>
+          <span class="opt">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>
+            Focus
+          </span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="normal">
+          <span class="opt">
+            <svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>
+            Normal
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="label"><label for="motion">Motion Pattern</label></div>
+      <div class="select">
+        <select id="motion">
+          <option value="orbit" selected>360° Circular Orbit</option>
+          <option value="sweep">Left-Right Sweep</option>
+          <option value="cinema">Cinema Room</option>
+          <option value="custom">Custom (Manual Drag)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group" id="speedGroup">
+      <div class="label">
+        <label for="speed">Speed</label>
+        <output id="speedOut">0.008</output>
+      </div>
+      <input type="range" id="speed" min="0.001" max="0.03" step="0.001" value="0.008">
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
